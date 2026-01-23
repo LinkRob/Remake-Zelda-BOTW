@@ -3,32 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZELDA RIM'K - ULTIMATE ENGINE</title>
+    <title>ZELDA RIM'K - PRO TECH</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Verdana', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Verdana', sans-serif; user-select: none; }
         canvas { display: block; }
         
-        /* HUD & UI */
-        #hud { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 5; }
-        .bar { width: 200px; height: 12px; background: rgba(0,0,0,0.5); border: 2px solid #fff; border-radius: 6px; margin-bottom: 5px; overflow: hidden; }
-        #hp-fill { width: 100%; height: 100%; background: #ff4b2b; }
-        #st-fill { width: 100%; height: 100%; background: #56ab2f; }
+        /* UI DESIGN */
+        #hud { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 10; }
+        .bar { width: 220px; height: 14px; background: rgba(0,0,0,0.6); border: 2px solid #fff; border-radius: 7px; margin-bottom: 8px; overflow: hidden; }
+        #hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff4b2b, #ff416c); }
+        #st-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #56ab2f, #a8e063); }
 
-        /* MINI-MAP */
-        #minimap { 
-            position: absolute; bottom: 20px; right: 20px; width: 150px; height: 150px; 
-            background: rgba(0,0,0,0.6); border: 3px solid gold; border-radius: 50%; overflow: hidden;
+        /* BOÎTE DE DIALOGUE */
+        #dialogue-box { 
+            position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);
+            width: 70%; background: rgba(0, 0, 0, 0.85); border: 3px solid gold; 
+            padding: 20px; color: white; display: none; z-index: 200; border-radius: 10px;
         }
-        #map-canvas { width: 100%; height: 100%; }
 
-        /* INVENTAIRE */
-        #inv-panel { 
+        /* MENU DE SAUVEGARDE & INVENTAIRE */
+        .menu-panel { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 300px; background: rgba(10, 20, 30, 0.95); border: 3px solid gold; 
-            padding: 20px; color: white; display: none; z-index: 100; text-align: center;
+            width: 350px; background: rgba(15, 25, 35, 0.95); border: 4px solid #fff; 
+            padding: 25px; color: white; display: none; z-index: 300; text-align: center; border-radius: 15px;
         }
+        button { background: gold; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; margin: 5px; border-radius: 5px; }
+        button:hover { background: white; }
 
-        /* OVERLAY INITIAL (CORRIGÉ) */
         #overlay { 
             position: fixed; inset: 0; background: rgba(0,0,0,0.9); 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
@@ -39,24 +40,29 @@
 <body>
 
     <div id="overlay">
-        <h1>ZELDA RIM'K : OPEN WORLD</h1>
-        <p>CLIQUEZ ICI POUR LANCER L'AVENTURE</p>
+        <h1>ZELDA RIM'K : PRO EDITION</h1>
+        <p>CLIQUEZ POUR CHARGER L'AVENTURE</p>
     </div>
 
     <div id="hud">
         <div class="bar"><div id="hp-fill"></div></div>
         <div class="bar"><div id="st-fill"></div></div>
-        <div id="save-status">Auto-save: ON</div>
+        <div id="status">EXPLORATION...</div>
     </div>
 
-    <div id="minimap"><canvas id="map-canvas"></canvas></div>
+    <div id="dialogue-box">
+        <b id="dialogue-name">???</b><br>
+        <span id="dialogue-text">...</span>
+    </div>
 
-    <div id="inv-panel">
-        <h2>SACOCHE</h2>
+    <div id="menu-save" class="menu-panel">
+        <h2>MENU GÉNÉRAL</h2>
         <hr>
-        <div id="inv-content">Épée de légende x1<br>Pomme x5</div>
-        <br>
-        <button onclick="document.getElementById('inv-panel').style.display='none'">FERMER</button>
+        <button id="btn-save">SAUVEGARDER PARTIE</button>
+        <button id="btn-load">CHARGER DERNIÈRE SAVE</button>
+        <button id="btn-inv">VOIR INVENTAIRE</button>
+        <br><br>
+        <button onclick="closeMenus()">RETOUR AU JEU</button>
     </div>
 
     <script type="importmap">
@@ -69,7 +75,7 @@
         // --- SETUP ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.01);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -77,119 +83,147 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- WORLD GEN ---
+        // --- WORLD ---
         const sun = new THREE.DirectionalLight(0xffffff, 1.2);
         sun.position.set(50, 100, 50);
         sun.castShadow = true;
-        scene.add(sun, new THREE.AmbientLight(0xffffff, 0.4));
+        scene.add(sun, new THREE.AmbientLight(0xffffff, 0.5));
 
-        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x3d7e31 }));
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // --- JOUEUR & DATA ---
-        let playerData = JSON.parse(localStorage.getItem('rimk_save')) || { x:0, z:0, hp:100 };
+        // --- PLAYER CONSTANTS ---
         const player = new THREE.Group();
-        player.position.set(playerData.x, 1.5, playerData.z);
-        player.add(camera);
         scene.add(player);
+        player.position.y = 1.5;
+        player.add(camera);
 
-        const sword = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.1), new THREE.MeshStandardMaterial({color:0xaaaaaa}));
-        sword.position.set(0.6, -0.5, -0.8);
-        sword.rotation.x = Math.PI/2;
+        const sword = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.2, 0.15), new THREE.MeshStandardMaterial({color: 0xdddddd}));
+        sword.position.set(0.7, -0.6, -1.2);
+        sword.rotation.x = Math.PI / 2;
         camera.add(sword);
 
-        // --- ENEMIES ---
+        // --- LOGIQUE VARIABLES ---
+        let keys = {}, stamina = 100, velocityY = 0, isGrounded = true, zoom = 0;
         const enemies = [];
-        const createEnemy = (x, z) => {
-            const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 1.5), new THREE.MeshStandardMaterial({color:0xff0000}));
-            m.position.set(x, 1, z);
-            m.castShadow = true;
-            m.userData = { hp: 3 };
-            scene.add(m);
-            enemies.push(m);
-        };
-        for(let i=0; i<20; i++) createEnemy(Math.random()*200-100, Math.random()*200-100);
+
+        // --- DIALOGUE SYSTEM ---
+        function showDialogue(name, text) {
+            document.getElementById('dialogue-box').style.display = 'block';
+            document.getElementById('dialogue-name').innerText = name;
+            document.getElementById('dialogue-text').innerText = text;
+            setTimeout(() => document.getElementById('dialogue-box').style.display = 'none', 4000);
+        }
 
         // --- CONTROLS ---
-        let keys = {}, stamina = 100;
-        const overlay = document.getElementById('overlay');
-        overlay.addEventListener('click', () => {
+        window.closeMenus = () => {
+            document.getElementById('menu-save').style.display = 'none';
             document.body.requestPointerLock();
-            overlay.style.display = 'none';
+        };
+
+        document.getElementById('overlay').addEventListener('click', () => {
+            document.body.requestPointerLock();
+            document.getElementById('overlay').style.display = 'none';
+            showDialogue("Link", "Où suis-je ? Le Plateau du Prélude semble différent...");
         });
 
         document.addEventListener('keydown', (e) => {
             keys[e.code] = true;
-            if(e.code === 'KeyI') {
-                const p = document.getElementById('inv-panel');
-                p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+            if(e.code === 'Escape' || e.code === 'KeyM') {
+                document.exitPointerLock();
+                document.getElementById('menu-save').style.display = 'block';
+            }
+            if(e.code === 'Space' && isGrounded) {
+                velocityY = 0.2;
+                isGrounded = false;
             }
         });
         document.addEventListener('keyup', (e) => keys[e.code] = false);
 
+        // ZOOM ROULETTE
+        document.addEventListener('wheel', (e) => {
+            camera.position.z = Math.max(-2, Math.min(5, camera.position.z + e.deltaY * 0.01));
+        });
+
         document.addEventListener('mousemove', (e) => {
             if(document.pointerLockElement) {
                 player.rotation.y -= e.movementX * 0.002;
-                camera.rotation.x = Math.max(-1.5, Math.min(1.5, camera.rotation.x - e.movementY * 0.002));
+                camera.rotation.x = Math.max(-1.4, Math.min(1.4, camera.rotation.x - e.movementY * 0.002));
             }
         });
 
-        // --- SAUVEGARDE AUTOMATIQUE ---
-        setInterval(() => {
-            localStorage.setItem('rimk_save', JSON.stringify({
-                x: player.position.x,
-                z: player.position.z,
-                hp: playerData.hp
-            }));
-            console.log("Sauvegardé !");
-        }, 5000);
-
-        // --- MINI-MAP RENDERER ---
-        const mapCanvas = document.getElementById('map-canvas');
-        const mapCtx = mapCanvas.getContext('2d');
-        mapCanvas.width = 150; mapCanvas.height = 150;
-
-        function updateMinimap() {
-            mapCtx.fillStyle = '#111';
-            mapCtx.fillRect(0, 0, 150, 150);
-            mapCtx.fillStyle = 'lime';
-            mapCtx.fillRect(75, 75, 5, 5); // Joueur au centre
-            
-            enemies.forEach(en => {
-                let dx = (en.position.x - player.position.x) + 75;
-                let dz = (en.position.z - player.position.z) + 75;
-                if(dx > 0 && dx < 150 && dz > 0 && dz < 150) {
-                    mapCtx.fillStyle = 'red';
-                    mapCtx.fillRect(dx, dz, 3, 3);
+        // ATTAQUE AU CLIC
+        document.addEventListener('mousedown', (e) => {
+            if(document.pointerLockElement && e.button === 0) {
+                // Animation d'attaque
+                sword.rotation.z += 1;
+                setTimeout(() => sword.rotation.z -= 1, 100);
+                
+                // Detection
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(), camera);
+                const hits = ray.intersectObjects(enemies);
+                if(hits.length > 0 && hits[0].distance < 5) {
+                    hits[0].object.position.add(ray.ray.direction.multiplyScalar(2));
                 }
-            });
+            }
+        });
+
+        // --- SAUVEGARDE MANUELLE ---
+        document.getElementById('btn-save').onclick = () => {
+            const save = { x: player.position.x, z: player.position.z, y: player.position.y };
+            localStorage.setItem('zelda_save_manual', JSON.stringify(save));
+            alert("Partie sauvegardée !");
+        };
+
+        document.getElementById('btn-load').onclick = () => {
+            const data = JSON.parse(localStorage.getItem('zelda_save_manual'));
+            if(data) {
+                player.position.set(data.x, data.y, data.z);
+                closeMenus();
+            }
+        };
+
+        // --- ENEMIES ---
+        for(let i=0; i<10; i++) {
+            const en = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshStandardMaterial({color:0xff0000}));
+            en.position.set(Math.random()*100-50, 1, Math.random()*100-50);
+            scene.add(en);
+            enemies.push(en);
         }
 
-        // --- MAIN LOOP ---
+        // --- ANIMATE ---
         function animate() {
             requestAnimationFrame(animate);
-            
-            // Movement logic
-            const speed = keys['ShiftLeft'] && stamina > 0 ? 0.4 : 0.15;
+
+            // Physique Saut
+            player.position.y += velocityY;
+            if(player.position.y > 1.5) {
+                velocityY -= 0.01; // Gravité
+                isGrounded = false;
+            } else {
+                player.position.y = 1.5;
+                velocityY = 0;
+                isGrounded = true;
+            }
+
+            // Déplacement
+            const speed = keys['ShiftLeft'] && stamina > 0 ? 0.35 : 0.15;
             const move = new THREE.Vector3();
-            if(keys['KeyW']) move.z -= 1;
-            if(keys['KeyS']) move.z += 1;
-            if(keys['KeyA']) move.x -= 1;
-            if(keys['KeyD']) move.x += 1;
+            if(keys['KeyW']) move.z -= 1; if(keys['KeyS']) move.z += 1;
+            if(keys['KeyA']) move.x -= 1; if(keys['KeyD']) move.x += 1;
 
             if(move.length() > 0) {
                 move.applyEuler(new THREE.Euler(0, player.rotation.y, 0)).normalize();
                 player.position.add(move.multiplyScalar(speed));
-                if(keys['ShiftLeft']) stamina -= 0.5;
+                if(keys['ShiftLeft']) stamina = Math.max(0, stamina - 0.6);
             } else {
                 stamina = Math.min(100, stamina + 0.3);
             }
-
             document.getElementById('st-fill').style.width = stamina + '%';
-            
-            updateMinimap();
+
             renderer.render(scene, camera);
         }
         animate();
