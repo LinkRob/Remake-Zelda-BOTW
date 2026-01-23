@@ -2,239 +2,141 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>ZELDA RIM'K - WEB VERSION</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZELDA RIM'K - OPEN WORLD ULTRA</title>
     <style>
-        body { margin: 0; overflow: hidden; background: black; font-family: sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; user-select: none; }
-        #health-bar { width: 200px; height: 20px; background: #333; border: 2px solid white; margin-bottom: 5px; }
-        #health-fill { width: 100%; height: 100%; background: #ff3333; transition: width 0.2s; }
-        #stamina-bar { width: 150px; height: 10px; background: #333; border: 1px solid white; }
-        #stamina-fill { width: 100%; height: 100%; background: #00ff00; }
-        #instructions { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: white; background: rgba(0,0,0,0.7); padding: 20px; text-align: center;
-            border: 2px solid gold; cursor: pointer;
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        #hud { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; }
+        .bar-container { width: 200px; height: 12px; background: rgba(0,0,0,0.5); border: 2px solid #fff; border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
+        #health-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff4b2b, #ff416c); }
+        #stamina-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #56ab2f, #a8e063); }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.5; }
+        #overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; color: gold; cursor: pointer; z-index: 10; text-align: center; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <div id="health-bar"><div id="health-fill"></div></div>
-        <div id="stamina-bar"><div id="stamina-fill"></div></div>
-        <h2 style="text-shadow: 2px 2px 0 #000;">ZELDA RIM'K</h2>
+    <div id="hud">
+        <div class="bar-container"><div id="health-fill"></div></div>
+        <div class="bar-container"><div id="stamina-fill"></div></div>
+        <div id="status">PLATEAU DU PRÉLUDE - HD</div>
     </div>
-
-    <div id="instructions">
-        <h1>CLIQUEZ POUR JOUER</h1>
-        <p>Z/Q/S/D : Bouger | SHIFT : Courir</p>
-        <p>CLIC GAUCHE : Attaquer</p>
-    </div>
+    <div id="crosshair"></div>
+    <div id="overlay"><h1>CLIQUER POUR ENTRER DANS L'OPEN WORLD</h1></div>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. SCÈNE & CAMÉRA ---
+        // --- SCÈNE & RENDERER ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB); // Ciel bleu
-        scene.fog = new THREE.Fog(0x87CEEB, 10, 50); // Brouillard lointain
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.02); // Brouillard réaliste
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        // --- 2. LUMIÈRES ---
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-        scene.add(hemiLight);
+        // --- LUMIÈRES CINÉMATIQUES ---
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambient);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(10, 20, 10);
-        dirLight.castShadow = true;
-        dirLight.shadow.camera.top = 50;
-        dirLight.shadow.camera.bottom = -50;
-        dirLight.shadow.camera.left = -50;
-        dirLight.shadow.camera.right = 50;
-        scene.add(dirLight);
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(50, 100, 50);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        scene.add(sun);
 
-        // --- 3. SOL (PLATEAU) ---
-        const groundGeo = new THREE.PlaneGeometry(200, 200);
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27 });
+        // --- ENVIRONNEMENT ---
+        const groundGeo = new THREE.PlaneGeometry(500, 500);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x3a5f0b, roughness: 0.8 });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // --- 4. JOUEUR & ÉPÉE ---
-        const playerGroup = new THREE.Group();
-        scene.add(playerGroup);
-        playerGroup.position.y = 1;
+        // Ajouter des "Arbres"
+        for(let i=0; i<100; i++) {
+            const trunk = new THREE.Mesh(new THREE.BoxGeometry(1, 5, 1), new THREE.MeshStandardMaterial({color: 0x4d2600}));
+            const leaves = new THREE.Mesh(new THREE.SphereGeometry(3, 8, 8), new THREE.MeshStandardMaterial({color: 0x1a3300}));
+            trunk.position.set(Math.random()*400-200, 2.5, Math.random()*400-200);
+            leaves.position.y = 4;
+            trunk.add(leaves);
+            trunk.castShadow = true;
+            scene.add(trunk);
+        }
 
-        // Corps (invisible, sert de pivot)
-        const bodyGeo = new THREE.BoxGeometry(1, 2, 1);
-        const bodyMat = new THREE.MeshBasicMaterial({ visible: false }); 
-        const playerBody = new THREE.Mesh(bodyGeo, bodyMat);
-        playerGroup.add(playerBody);
+        // --- JOUEUR ET ÉPÉE ---
+        const player = new THREE.Group();
+        scene.add(player);
+        player.position.set(0, 1.5, 0);
+        player.add(camera);
 
-        // Épée
-        const swordGeo = new THREE.BoxGeometry(0.1, 0.8, 0.1);
-        const swordMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
-        const sword = new THREE.Mesh(swordGeo, swordMat);
-        sword.position.set(0.5, -0.2, -0.8);
+        const sword = new THREE.Mesh(
+            new THREE.BoxGeometry(0.15, 1.2, 0.15),
+            new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 })
+        );
+        sword.position.set(0.6, -0.5, -1);
         sword.rotation.x = Math.PI / 2;
-        camera.add(sword); // L'épée est attachée à la caméra
-        playerGroup.add(camera); // La caméra est attachée au joueur
+        camera.add(sword);
 
-        // --- 5. ENNEMIS (BOKOBLINS) ---
+        // --- ENNEMIS ---
         const enemies = [];
-        const enemyGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-        const enemyMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const createBokoblin = (x, z) => {
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 1.5), new THREE.MeshStandardMaterial({ color: 0xbc2a1a }));
+            body.position.set(x, 1, z);
+            body.castShadow = true;
+            body.userData = { hp: 3, speed: 0.06 };
+            scene.add(body);
+            enemies.push(body);
+        };
+        for(let i=0; i<15; i++) createBokoblin(Math.random()*100-50, Math.random()*100-50);
 
-        function createEnemy(x, z) {
-            const enemy = new THREE.Mesh(enemyGeo, enemyMat.clone());
-            enemy.position.set(x, 0.75, z);
-            enemy.castShadow = true;
-            enemy.userData = { hp: 3, lastHit: 0 };
-            scene.add(enemy);
-            enemies.push(enemy);
-        }
+        // --- CONTRÔLES & LOGIQUE ---
+        let keys = {}, stamina = 100, isAttacking = false;
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+        document.getElementById('overlay').addEventListener('click', () => document.body.requestPointerLock());
 
-        // Créer 5 ennemis aléatoires
-        for(let i=0; i<5; i++) {
-            createEnemy((Math.random()-0.5)*40, (Math.random()-0.5)*40);
-        }
-
-        // --- 6. CONTRÔLES ---
-        const keys = { w:false, a:false, s:false, d:false, shift:false };
-        document.addEventListener('keydown', (e) => {
-            if(e.code === 'KeyW') keys.w = true;
-            if(e.code === 'KeyS') keys.s = true;
-            if(e.code === 'KeyA') keys.a = true;
-            if(e.code === 'KeyD') keys.d = true;
-            if(e.code === 'ShiftLeft') keys.shift = true;
-        });
-        document.addEventListener('keyup', (e) => {
-            if(e.code === 'KeyW') keys.w = false;
-            if(e.code === 'KeyS') keys.s = false;
-            if(e.code === 'KeyA') keys.a = false;
-            if(e.code === 'KeyD') keys.d = false;
-            if(e.code === 'ShiftLeft') keys.shift = false;
-        });
-
-        // Verrouillage souris (FPS Mode)
-        const instructions = document.getElementById('instructions');
-        instructions.addEventListener('click', () => {
-            document.body.requestPointerLock();
-        });
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === document.body) {
-                instructions.style.display = 'none';
-            } else {
-                instructions.style.display = 'block';
-            }
-        });
         document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === document.body) {
-                playerGroup.rotation.y -= e.movementX * 0.002;
+            if (document.pointerLockElement) {
+                player.rotation.y -= e.movementX * 0.002;
                 camera.rotation.x -= e.movementY * 0.002;
-                // Limite vue haut/bas
-                camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+                camera.rotation.x = Math.max(-1.5, Math.min(1.5, camera.rotation.x));
             }
         });
 
-        // Attaque
-        let isAttacking = false;
         document.addEventListener('mousedown', () => {
-            if (document.pointerLockElement === document.body && !isAttacking) {
+            if (document.pointerLockElement && !isAttacking) {
                 isAttacking = true;
-                // Animation épée
-                let startRot = sword.rotation.x;
-                let duration = 0;
-                const attackAnim = setInterval(() => {
-                    duration += 0.1;
-                    sword.rotation.x = startRot - Math.sin(duration * Math.PI) * 1.5;
-                    sword.rotation.z = -Math.sin(duration * Math.PI) * 0.5;
-                    
-                    if(duration >= 1) {
-                        clearInterval(attackAnim);
-                        sword.rotation.x = Math.PI/2; 
-                        sword.rotation.z = 0;
-                        isAttacking = false;
-                    }
-                }, 16);
+                const tl = new THREE.Vector3(sword.rotation.x, sword.rotation.y, sword.rotation.z);
+                // Animation simple
+                sword.rotation.z += 1.5;
+                setTimeout(() => { 
+                    sword.rotation.z -= 1.5; 
+                    isAttacking = false; 
+                }, 150);
 
-                // Raycast (Dégâts)
-                const raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-                const intersects = raycaster.intersectObjects(enemies);
-                
-                if(intersects.length > 0 && intersects[0].distance < 4) {
-                    const hitEnemy = intersects[0].object;
-                    hitEnemy.userData.hp -= 1;
-                    
-                    // Effet visuel (Flash blanc)
-                    hitEnemy.material.color.setHex(0xffffff);
-                    setTimeout(() => hitEnemy.material.color.setHex(0xff0000), 100);
-                    
-                    // Recul
-                    const pushDir = intersects[0].point.sub(playerGroup.position).normalize();
-                    hitEnemy.position.add(pushDir.multiplyScalar(2));
-
-                    if(hitEnemy.userData.hp <= 0) {
-                        scene.remove(hitEnemy);
-                        enemies.splice(enemies.indexOf(hitEnemy), 1);
+                // Raycast pour dégâts
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(), camera);
+                const hits = ray.intersectObjects(enemies);
+                if(hits.length > 0 && hits[0].distance < 4) {
+                    hits[0].object.userData.hp--;
+                    hits[0].object.position.add(ray.ray.direction.multiplyScalar(2));
+                    if(hits[0].object.userData.hp <= 0) {
+                        scene.remove(hits[0].object);
+                        enemies.splice(enemies.indexOf(hits[0].object), 1);
                     }
                 }
             }
         });
 
-        // --- 7. BOUCLE DE JEU ---
-        let stamina = 100;
-        
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Mouvement Joueur
-            const speed = (keys.shift && stamina > 0) ? 0.3 : 0.1;
-            if(keys.shift && (keys.w || keys.s || keys.a || keys.d)) {
-                stamina = Math.max(0, stamina - 0.5);
-            } else {
-                stamina = Math.min(100, stamina + 0.2);
-            }
-            document.getElementById('stamina-fill').style.width = stamina + '%';
-
-            const direction = new THREE.Vector3();
-            if(keys.w) direction.z -= 1;
-            if(keys.s) direction.z += 1;
-            if(keys.a) direction.x -= 1;
-            if(keys.d) direction.x += 1;
-
-            direction.applyEuler(new THREE.Euler(0, playerGroup.rotation.y, 0));
-            playerGroup.position.add(direction.normalize().multiplyScalar(speed));
-
-            // IA Ennemis
-            enemies.forEach(en => {
-                const dist = en.position.distanceTo(playerGroup.position);
-                if(dist < 20 && dist > 1.5) {
-                    const dirToPlayer = new THREE.Vector3().subVectors(playerGroup.position, en.position).normalize();
-                    en.position.add(dirToPlayer.multiplyScalar(0.05)); // Vitesse ennemi
-                    en.lookAt(playerGroup.position);
-                }
-            });
-
-            renderer.render(scene, camera);
-        }
-        animate();
-    </script>
-</body>
-</html>
+        // --- BOUCLE D'ANIMATION ---
+        function animate(time) {
